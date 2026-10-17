@@ -28,6 +28,8 @@
                color: #2E6B4F; background: #eaf4ee; cursor: pointer; }
   .filelabel small { display: block; margin-top: 6px; font-weight: 400; font-size: 13px; color: #5a6b7c; }
   #status { font-size: 14px; color: #33414f; min-height: 20px; margin-top: 8px; text-align: center; }
+  #uprog { height: 10px; background: #e3e9ef; border-radius: 6px; margin-top: 10px; display: none; }
+  #uprogbar { height: 100%; width: 0%; background: #2E6B4F; border-radius: 6px; transition: width .2s; }
   .spinner { display: inline-block; width: 16px; height: 16px; border: 3px solid #cdd7e1;
              border-top-color: #2E6B4F; border-radius: 50%; animation: spin .8s linear infinite;
              vertical-align: -3px; margin-left: 6px; }
@@ -75,6 +77,7 @@
     </label>
     <input type="file" id="picker" accept="image/*,.jpg,.jpeg,.png,application/pdf,.pdf" multiple>
     <div id="filelist" class="note" style="margin-top:8px"></div>
+    <div id="uprog"><div id="uprogbar"></div></div>
   </div>
 
   <div class="card">
@@ -102,41 +105,111 @@
 const $ = id => document.getElementById(id);
 let DAY = null, PAGE_IDS = [];
 
+// --- hardened upload: progress bar, timeout, clear errors, retry ---
+const UPLOAD_TIMEOUT_MS = 120000;
+
+function postForm(url, fd, onProgress, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const x = new XMLHttpRequest();
+    x.open('POST', url);
+    x.timeout = timeoutMs || UPLOAD_TIMEOUT_MS;
+    if (onProgress && x.upload) {
+      x.upload.onprogress = e => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+    }
+    x.onload = () => {
+      let j = null;
+      try { j = JSON.parse(x.responseText); } catch (e) {}
+      if (x.status >= 200 && x.status < 300 && j) resolve(j);
+      else reject(new Error((j && j.error) || ('server-' + x.status)));
+    };
+    x.onerror = () => reject(new Error('network'));
+    x.ontimeout = () => reject(new Error('timeout'));
+    x.send(fd);
+  });
+}
+
+// Shrink huge phone photos before upload: faster on slow networks,
+// faster to read, and the reader needs no more than ~2200px.
+async function shrinkImage(file, maxDim) {
+  maxDim = maxDim || 2200;
+  if (!file.type || file.type.indexOf('image/') !== 0) return file;
+  try {
+    const bmp = await createImageBitmap(file, {imageOrientation: 'from-image'});
+    const w = bmp.width, h = bmp.height;
+    if (Math.max(w, h) <= maxDim) { if (bmp.close) bmp.close(); return file; }
+    const s = maxDim / Math.max(w, h);
+    const c = document.createElement('canvas');
+    c.width = Math.round(w * s); c.height = Math.round(h * s);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    if (bmp.close) bmp.close();
+    const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.85));
+    if (!blob) return file;
+    const name = file.name.replace(/\.(png|heic|heif|webp|bmp)$/i, '.jpg');
+    return new File([blob], name, {type: 'image/jpeg'});
+  } catch (e) { return file; } // never break the upload
+}
+
+function uploadError(msg) {
+  $('filelist').textContent = '❌ ' + msg + ' — دوبارہ کوشش کریں · please try again';
+}
+
 $('picker').addEventListener('change', async e => {
   const files = e.target.files;
+  e.target.value = '';
   if (!files.length) return;
-  $('filelist').textContent = 'اپ لوڈ ہو رہا ہے… Uploading…';
-  const fd = new FormData();
-  for (const f of files) fd.append('files', f);
-  const r = await fetch('/upload', {method: 'POST', body: fd});
-  const j = await r.json();
-  if (!j.ok) { $('filelist').textContent = 'خرابی: ' + (j.error || 'upload failed'); return; }
-  DAY = j.day; PAGE_IDS = j.pages;
-  $('filelist').textContent = `✓ ${j.pages.length} صفحے تیار · pages ready` +
-    (j.skipped.length ? ` (نظر انداز: ${j.skipped.join(', ')})` : '');
-  $('ocrbtn').disabled = !j.pages.length;
+  const bar = $('uprog'), fill = $('uprogbar');
+  bar.style.display = 'block'; fill.style.width = '0%';
+  $('filelist').textContent = 'اپ لوڈ ہو رہا ہے… Uploading… 0%';
+  $('ocrbtn').disabled = true;
+  try {
+    const shrunk = [];
+    for (const f of files) shrunk.push(await shrinkImage(f));
+    const fd = new FormData();
+    for (const f of shrunk) fd.append('files', f, f.name);
+    const j = await postForm('/upload', fd, p => {
+      const pc = Math.round(p * 100);
+      fill.style.width = pc + '%';
+      $('filelist').textContent = 'اپ لوڈ ہو رہا ہے… Uploading… ' + pc + '%';
+    });
+    if (!j.ok) { uploadError(j.error || 'upload failed'); return; }
+    DAY = j.day; PAGE_IDS = j.pages;
+    $('filelist').textContent = `✓ ${j.pages.length} صفحے تیار · pages ready` +
+      (j.skipped.length ? ` (نظر انداز: ${j.skipped.join(', ')})` : '');
+    $('ocrbtn').disabled = !j.pages.length;
+  } catch (err) {
+    uploadError(err.message === 'timeout'
+      ? 'انٹرنیٹ بہت سست ہے · internet too slow'
+      : 'انٹرنیٹ کا مسئلہ · connection problem');
+  } finally {
+    setTimeout(() => { bar.style.display = 'none'; }, 800);
+  }
 });
 
 $('ocrbtn').addEventListener('click', async () => {
   $('ocrbtn').disabled = true;
   $('status').innerHTML = '<span class="spinner"></span> پڑھا جا رہا ہے… Reading… (تقریباً ۳۰ سیکنڈ فی تصویر)';
-  const r = await fetch('/ocr', {method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({day: DAY})});
-  const j = await r.json();
-  $('ocrbtn').disabled = false;
-  if (!j.ok) { $('status').textContent = 'خرابی: ' + (j.error || 'OCR failed'); return; }
-  $('status').textContent = `✓ ${j.pages.length} صفحے پڑھ لیے · done`;
-  $('honest').style.display = 'block';
-  // Build review UI
-  const wrap = $('pages'); wrap.innerHTML = '';
-  for (const p of j.pages) {
-    const det = await (await fetch(`/page-text?day=${DAY}&id=${encodeURIComponent(p.id)}`)).json();
-    const pg = det.page;
-    const block = document.createElement('div');
-    block.className = 'pageblock';
-    const lowCls = p.low_conf_count ? 'badge low' : 'badge';
-    block.innerHTML = `
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 300000); // 5 min max
+  try {
+    const r = await fetch('/ocr', {method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({day: DAY}), signal: ctrl.signal});
+    const j = await r.json();
+    if (!j.ok) { $('status').textContent = '❌ خرابی: ' + (j.error || 'پڑھائی ناکام · reading failed'); return; }
+    $('status').textContent = `✓ ${j.pages.length} صفحے پڑھ لیے · done`;
+    $('honest').style.display = 'block';
+    // Build review UI
+    const wrap = $('pages'); wrap.innerHTML = '';
+    for (const p of j.pages) {
+      let det = null;
+      try {
+        det = await (await fetch(`/page-text?day=${DAY}&id=${encodeURIComponent(p.id)}`)).json();
+      } catch (e) { det = null; }
+      const pg = (det && det.page) || {text: '', low_conf_words: []};
+      const block = document.createElement('div');
+      block.className = 'pageblock';
+      const lowCls = p.low_conf_count ? 'badge low' : 'badge';
+      block.innerHTML = `
       <div class="pagehead"><span>📄 ${p.id}</span>
         <span class="${lowCls}">⚠️ ${p.low_conf_count} غیر یقینی الفاظ · unsure words</span>
         <span class="badge ltr">confidence ${p.mean_conf}% · ${p.word_count} words</span>
@@ -150,10 +223,18 @@ $('ocrbtn').addEventListener('click', async () => {
             '<span class="note">سب الفاظ واضح ہیں · all words clear ✓</span>'}</div>
         </div>
       </div>`;
-    wrap.appendChild(block);
+      wrap.appendChild(block);
+    }
+    $('reviewcard').style.display = 'block';
+    $('reviewcard').scrollIntoView({behavior: 'smooth'});
+  } catch (err) {
+    $('status').textContent = '❌ ' + (err && err.name === 'AbortError'
+      ? 'بہت وقت لگ گیا — دوبارہ کوشش کریں · took too long — try again'
+      : 'انٹرنیٹ کا مسئلہ — دوبارہ کوشش کریں · connection problem — try again');
+  } finally {
+    clearTimeout(timer);
+    $('ocrbtn').disabled = false;
   }
-  $('reviewcard').style.display = 'block';
-  $('reviewcard').scrollIntoView({behavior: 'smooth'});
 });
 
 $('buildbtn').addEventListener('click', async () => {
@@ -161,16 +242,21 @@ $('buildbtn').addEventListener('click', async () => {
   $('buildbtn').textContent = 'بن رہی ہے… Building…';
   const texts = {};
   document.querySelectorAll('textarea[data-pid]').forEach(t => { texts[t.dataset.pid] = t.value; });
-  const r = await fetch('/build', {method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({day: DAY, texts})});
-  const j = await r.json();
-  $('buildbtn').disabled = false;
-  $('buildbtn').textContent = '📝 ورڈ فائل بنائیں · Make Word file';
-  if (!j.ok) { alert('خرابی: ' + (j.error || 'build failed')); return; }
-  $('dllink').href = j.download;
-  $('download').style.display = 'block';
-  $('download').scrollIntoView({behavior: 'smooth'});
+  try {
+    const r = await fetch('/build', {method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({day: DAY, texts})});
+    const j = await r.json();
+    if (!j.ok) { alert('خرابی: ' + (j.error || 'build failed')); return; }
+    $('dllink').href = j.download;
+    $('download').style.display = 'block';
+    $('download').scrollIntoView({behavior: 'smooth'});
+  } catch (err) {
+    alert('❌ انٹرنیٹ کا مسئلہ — دوبارہ کوشش کریں · connection problem — try again');
+  } finally {
+    $('buildbtn').disabled = false;
+    $('buildbtn').textContent = '📝 ورڈ فائل بنائیں · Make Word file';
+  }
 });
 </script>
 </body>
