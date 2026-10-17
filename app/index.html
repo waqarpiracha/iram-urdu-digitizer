@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ur" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2E6B4F">
+<title>اردو نصاب ڈیجیٹائزر | Urdu Digitizer</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; font-family: "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq",
+         system-ui, sans-serif; background: #f4f7f5; color: #1c2733; }
+  header { background: #2E6B4F; color: #fff; padding: 18px 16px 14px; text-align: center; }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 4px 0 0; font-size: 13px; opacity: .9; }
+  main { padding: 16px; max-width: 560px; margin: 0 auto; }
+  .card { background: #fff; border-radius: 14px; padding: 18px; margin-bottom: 14px;
+          box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  .card h2 { margin: 0 0 10px; font-size: 17px; color: #2E6B4F; }
+  .bigbtn { display: block; width: 100%; border: none; border-radius: 12px;
+            padding: 18px; font-size: 18px; font-weight: 700; color: #fff;
+            background: #2E6B4F; margin-top: 10px; cursor: pointer; }
+  .bigbtn:active { transform: scale(.98); background: #1f4a37; }
+  .bigbtn.green { background: #1e7e34; }
+  .bigbtn:disabled { background: #9aa7b4; cursor: default; }
+  input[type=file] { display: none; }
+  .filelabel { display: block; width: 100%; border: 2px dashed #2E6B4F; border-radius: 12px;
+               padding: 26px 12px; text-align: center; font-size: 17px; font-weight: 600;
+               color: #2E6B4F; background: #eaf4ee; cursor: pointer; }
+  .filelabel small { display: block; margin-top: 6px; font-weight: 400; font-size: 13px; color: #5a6b7c; }
+  #status { font-size: 14px; color: #33414f; min-height: 20px; margin-top: 8px; text-align: center; }
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 3px solid #cdd7e1;
+             border-top-color: #2E6B4F; border-radius: 50%; animation: spin .8s linear infinite;
+             vertical-align: -3px; margin-left: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .note { font-size: 13px; color: #6b7a8a; }
+  .warn { background: #FFF8E1; border: 1px solid #F0D060; border-radius: 10px;
+          padding: 10px 12px; font-size: 14px; margin-top: 10px; }
+  /* Review layout: side-by-side on laptop, stacked on phone */
+  .review { display: none; }
+  .pageblock { border: 1px solid #dfe6e1; border-radius: 12px; margin-bottom: 16px; overflow: hidden; }
+  .pagehead { background: #eaf4ee; padding: 10px 14px; font-weight: 700; color: #2E6B4F;
+              display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
+  .badge { font-size: 12px; background: #fff; border-radius: 20px; padding: 4px 10px; border: 1px solid #cfe0d6; }
+  .badge.low { background: #FFF3CD; border-color: #F0D060; }
+  .pagesplit { display: grid; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { .pagesplit { grid-template-columns: 1fr 1fr; } }
+  .pagesplit img { width: 100%; height: auto; display: block; background: #fff; }
+  .editpane { padding: 10px; display: flex; flex-direction: column; }
+  .editpane textarea { width: 100%; min-height: 220px; font-size: 18px; line-height: 2.2;
+                       direction: rtl; text-align: right; border: 1px solid #dfe6e1;
+                       border-radius: 8px; padding: 10px; resize: vertical;
+                       font-family: inherit; }
+  .chips { margin-top: 8px; font-size: 13px; }
+  .chip { display: inline-block; background: #FFF3CD; border: 1px solid #F0D060;
+          border-radius: 16px; padding: 3px 10px; margin: 2px; font-size: 14px; }
+  #download { display: none; text-align: center; }
+  #download a { display: inline-block; margin-top: 10px; padding: 16px 28px; font-size: 18px;
+               font-weight: 700; color: #fff; background: #1e7e34; border-radius: 12px;
+               text-decoration: none; }
+  .ltr { direction: ltr; unicode-bidi: embed; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📖 اردو نصاب ڈیجیٹائزر</h1>
+  <p>تصویر یا PDF اپ لوڈ کریں ← کمپیوٹر پڑھے گا ← آپ درست کریں ← ورڈ فائل ڈاؤن لوڈ کریں</p>
+  <p class="ltr" style="font-size:12px">Upload a photo or PDF → computer reads it → you correct it → download Word</p>
+</header>
+<main>
+  <div class="card">
+    <h2>۱ · تصویر / PDF اپ لوڈ کریں <span class="ltr note">— Upload</span></h2>
+    <label class="filelabel" for="picker">📎 تصویر منتخب کریں
+      <small>JPG / PNG / PDF — صاف اور سیدھی تصویر بہتر پڑھی جائے گی</small>
+      <small class="ltr">Clear, straight photos read best. Handwriting may not read at all — that's normal.</small>
+    </label>
+    <input type="file" id="picker" accept="image/*,.jpg,.jpeg,.png,application/pdf,.pdf" multiple>
+    <div id="filelist" class="note" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card">
+    <h2>۲ · کمپیوٹر سے پڑھوائیں <span class="ltr note">— Read</span></h2>
+    <button class="bigbtn" id="ocrbtn" disabled>🔍 پڑھنا شروع کریں · Start reading</button>
+    <div id="status"></div>
+    <div class="warn" id="honest" style="display:none">
+      ⚠️ کمپیوٹر ہاتھ کی لکھی ہوئی <b>نستعلیق</b> تحریر ٹھیک سے نہیں پڑھ سکتا۔
+      غیر یقینی الفاظ <mark>پیلے</mark> نشان سے نمایاں ہوں گے — آپ خود درست کر لیں۔
+      <div class="ltr note">Handwritten Nastaliq often can't be read — unsure words are highlighted yellow for you to fix. Nothing is ever guessed silently.</div>
+    </div>
+  </div>
+
+  <div class="card review" id="reviewcard">
+    <h2>۳ · جائزہ لیں اور درست کریں <span class="ltr note">— Review &amp; correct</span></h2>
+    <p class="note">بائیں تصویر، دائیں عبارت — غلط الفاظ ٹھیک کر دیں۔ پیلے الفاظ ضرور دیکھیں۔
+      <span class="ltr">Image left, text right — fix any mistakes. Do check the yellow words.</span></p>
+    <div id="pages"></div>
+    <button class="bigbtn green" id="buildbtn">📝 ورڈ فائل بنائیں · Make Word file</button>
+    <div id="download"><a href="#" id="dllink">⬇️ ورڈ فائل ڈاؤن لوڈ کریں · Download</a></div>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let DAY = null, PAGE_IDS = [];
+
+$('picker').addEventListener('change', async e => {
+  const files = e.target.files;
+  if (!files.length) return;
+  $('filelist').textContent = 'اپ لوڈ ہو رہا ہے… Uploading…';
+  const fd = new FormData();
+  for (const f of files) fd.append('files', f);
+  const r = await fetch('/upload', {method: 'POST', body: fd});
+  const j = await r.json();
+  if (!j.ok) { $('filelist').textContent = 'خرابی: ' + (j.error || 'upload failed'); return; }
+  DAY = j.day; PAGE_IDS = j.pages;
+  $('filelist').textContent = `✓ ${j.pages.length} صفحے تیار · pages ready` +
+    (j.skipped.length ? ` (نظر انداز: ${j.skipped.join(', ')})` : '');
+  $('ocrbtn').disabled = !j.pages.length;
+});
+
+$('ocrbtn').addEventListener('click', async () => {
+  $('ocrbtn').disabled = true;
+  $('status').innerHTML = '<span class="spinner"></span> پڑھا جا رہا ہے… Reading… (تقریباً ۳۰ سیکنڈ فی تصویر)';
+  const r = await fetch('/ocr', {method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({day: DAY})});
+  const j = await r.json();
+  $('ocrbtn').disabled = false;
+  if (!j.ok) { $('status').textContent = 'خرابی: ' + (j.error || 'OCR failed'); return; }
+  $('status').textContent = `✓ ${j.pages.length} صفحے پڑھ لیے · done`;
+  $('honest').style.display = 'block';
+  // Build review UI
+  const wrap = $('pages'); wrap.innerHTML = '';
+  for (const p of j.pages) {
+    const det = await (await fetch(`/page-text?day=${DAY}&id=${encodeURIComponent(p.id)}`)).json();
+    const pg = det.page;
+    const block = document.createElement('div');
+    block.className = 'pageblock';
+    const lowCls = p.low_conf_count ? 'badge low' : 'badge';
+    block.innerHTML = `
+      <div class="pagehead"><span>📄 ${p.id}</span>
+        <span class="${lowCls}">⚠️ ${p.low_conf_count} غیر یقینی الفاظ · unsure words</span>
+        <span class="badge ltr">confidence ${p.mean_conf}% · ${p.word_count} words</span>
+      </div>
+      <div class="pagesplit">
+        <img src="/page-image?day=${DAY}&id=${encodeURIComponent(p.id)}" alt="page image">
+        <div class="editpane">
+          <textarea data-pid="${p.id}" dir="rtl">${(pg.text || '').replace(/</g,'&lt;')}</textarea>
+          <div class="chips">${pg.low_conf_words.map(w =>
+            `<span class="chip">${w.replace(/</g,'&lt;')}</span>`).join('') ||
+            '<span class="note">سب الفاظ واضح ہیں · all words clear ✓</span>'}</div>
+        </div>
+      </div>`;
+    wrap.appendChild(block);
+  }
+  $('reviewcard').style.display = 'block';
+  $('reviewcard').scrollIntoView({behavior: 'smooth'});
+});
+
+$('buildbtn').addEventListener('click', async () => {
+  $('buildbtn').disabled = true;
+  $('buildbtn').textContent = 'بن رہی ہے… Building…';
+  const texts = {};
+  document.querySelectorAll('textarea[data-pid]').forEach(t => { texts[t.dataset.pid] = t.value; });
+  const r = await fetch('/build', {method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({day: DAY, texts})});
+  const j = await r.json();
+  $('buildbtn').disabled = false;
+  $('buildbtn').textContent = '📝 ورڈ فائل بنائیں · Make Word file';
+  if (!j.ok) { alert('خرابی: ' + (j.error || 'build failed')); return; }
+  $('dllink').href = j.download;
+  $('download').style.display = 'block';
+  $('download').scrollIntoView({behavior: 'smooth'});
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+flask>=3.0
+pytesseract>=0.3
+Pillow>=10.0
+python-docx>=1.1
+pypdfium2>=4.0
+# NOTE: OCR also needs the tesseract SYSTEM binary + Urdu language data,
+# which pip cannot provide:
+#   sudo apt-get install tesseract-ocr tesseract-ocr-urd
+# (reinstall after any VM replacement — /usr is wiped)
